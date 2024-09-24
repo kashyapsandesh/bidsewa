@@ -45,3 +45,10 @@ console.log(`server working`)
 
 Step 13: Run the basic setup server with
 npm start
+
+Step 14:
+"typeRoots": [
+"./src/types",
+"./node_modules/@types"
+]
+"outDir": "./build"
