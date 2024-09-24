@@ -52,3 +52,18 @@ Step 14:
 "./node_modules/@types"
 ]
 "outDir": "./build"
+
+
+# Prisma
+Install Prisma package and prisma client:
+ npm i prisma @prisma/client
+
+
+ Initiallized Prisma:npx prisma init
+
+
+ # Change Database from .env file by default postgresql is made:
+ default:DATABASE_URL="postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public"
+
+
+ After changing to mysql:DATABASE_URL="mysql://root:@localhost:3306/bidsewa?schema=public"
