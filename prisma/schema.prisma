@@ -1,14 +1,221 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SELLER
+  BUYER
+  INSPECTOR
+  ADMIN
+}
+
+enum SubscriptionPlanType {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum PaymentMethod {
+  ESEWA
+  KHALTI
+  CONNECTIPS
+  BANK
+}
+
+model User {
+  id                  Int                   @id @default(autoincrement())
+  username            String                @unique
+  email               String?               @unique
+  isEmailVerified     Boolean               @default(false)
+  phone               String?               @unique
+  isPhoneVerified     Boolean               @default(false)
+  otp                 String?
+  passwordResetTokens PasswordResetToken[]
+  subscriptions       Subscription[]
+  password            String
+  role                Role                  @default(BUYER)
+  bankDetails         BankDetails[]
+  products            BidProduct[]
+  bids                Bid[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  lastLogin           DateTime?
+  location            Location?             @relation(fields: [locationId], references: [id])
+  profileImage        String?
+  AuditLog            AuditLog[]
+  Wallet              Wallet[]
+  devicePlayerId      String?
+  InspectorProfile    InspectorProfile[]
+  WalletHistory       WalletHistory[]
+  SubscriptionHistory SubscriptionHistory[]
+  InspectionRequest   InspectionRequest[]
+  dueCommission       Float
+  locationId          Int?
+
+  @@index([email]) // Index for email for performance
+  @@index([phone]) // Index for phone for performance
+  @@index([lastLogin]) // Index for lastLogin for performance
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model Subscription {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  plan      SubscriptionPlanType @default(FREE)
+  createdAt DateTime             @default(now())
+  expiresAt DateTime
+  updatedAt DateTime             @updatedAt
+  User      User                 @relation(fields: [userId], references: [id])
+}
+
+model SubscriptionHistory {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  plan      SubscriptionPlanType
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  User      User                 @relation(fields: [userId], references: [id])
+}
+
+model BankDetails {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  bankName      String
+  accountNumber String
+  accountName   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  User          User     @relation(fields: [userId], references: [id])
+}
+
+model Category {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  BidProducts BidProduct[]
+}
+
+model BidProduct {
+  id                Int                 @id @default(autoincrement())
+  userId            Int
+  name              String
+  description       String
+  startingBidAmount Float
+  currentBidAmount  Float
+  highestBidAmount  Float
+  bidstartTime      DateTime
+  bidEndTime        DateTime
+  bids              Bid[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  seller            User                @relation(fields: [userId], references: [id])
+  images            Image[]
+  videos            Video[]
+  categoryId        Int?
+  category          Category?           @relation(fields: [categoryId], references: [id])
+  InspectionRequest InspectionRequest[]
+}
+
+model Bid {
+  id           Int        @id @default(autoincrement())
+  bidProductId Int
+  userId       Int
+  amount       Float
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  BidProduct   BidProduct @relation(fields: [bidProductId], references: [id], onDelete: Cascade)
+  User         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Image {
+  id           Int        @id @default(autoincrement())
+  bidProductId Int
+  url          String // URL or path to the image
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  BidProduct   BidProduct @relation(fields: [bidProductId], references: [id], onDelete: Cascade)
+}
+
+model Video {
+  id           Int        @id @default(autoincrement())
+  bidProductId Int
+  url          String // URL or path to the video
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  BidProduct   BidProduct @relation(fields: [bidProductId], references: [id], onDelete: Cascade)
+}
+
+// Audit Logs for user actions
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model Wallet {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  balance   Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model WalletHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  amount    Float
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model InspectorProfile {
+  id                       Int    @id @default(autoincrement())
+  userId                   Int
+  inspectionExpertCategory String
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  user              User                @relation(fields: [userId], references: [id])
+  InspectionRequest InspectionRequest[]
+}
+
+model InspectionRequest {
+  id                 Int              @id @default(autoincrement())
+  userId             Int
+  inspectorProfileId Int
+  bidProductId       Int
+  status             String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  user               User             @relation(fields: [userId], references: [id])
+  inspectorProfile   InspectorProfile @relation(fields: [inspectorProfileId], references: [id])
+  bidProduct         BidProduct       @relation(fields: [bidProductId], references: [id])
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  latitude  Float // Latitude of the location
+  longitude Float // Longitude of the location
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User[]
 }

@@ -67,3 +67,6 @@ Install Prisma package and prisma client:
 
 
  After changing to mysql:DATABASE_URL="mysql://root:@localhost:3306/bidsewa?schema=public"
+
+# Migrate schema in database using the command 
+npx prisma migrate
