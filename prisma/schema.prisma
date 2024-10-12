@@ -23,7 +23,7 @@ enum SubscriptionPlanType {
 enum PaymentMethod {
   ESEWA
   KHALTI
-  CONNECTIPS
+
   BANK
 }
 
@@ -54,12 +54,27 @@ model User {
   WalletHistory       WalletHistory[]
   SubscriptionHistory SubscriptionHistory[]
   InspectionRequest   InspectionRequest[]
-  dueCommission       Float
-  locationId          Int?
+  dueCommission       Float?
+
+  locationId        Int?
+  EsewaDetails      EsewaDetails[]
+  KhaltiDetails     KhaltiDetails[]
+  UserPaymentMethod UserPaymentMethod[]
 
   @@index([email]) // Index for email for performance
   @@index([phone]) // Index for phone for performance
   @@index([lastLogin]) // Index for lastLogin for performance
+}
+
+model UserPaymentMethod {
+  id            Int          @id @default(autoincrement())
+  userId        Int
+  method        String
+  esewaId       String? // Optional field for ESEWA
+  khaltiId      String? // Optional field for KHALTI
+  bankDetails   BankDetails? @relation(fields: [bankDetailsId], references: [id])
+  bankDetailsId Int?
+  user          User         @relation(fields: [userId], references: [id])
 }
 
 model PasswordResetToken {
@@ -91,14 +106,33 @@ model SubscriptionHistory {
 }
 
 model BankDetails {
-  id            Int      @id @default(autoincrement())
-  userId        Int
-  bankName      String
-  accountNumber String
-  accountName   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  User          User     @relation(fields: [userId], references: [id])
+  id                Int                 @id @default(autoincrement())
+  userId            Int
+  bankName          String
+  accountNumber     String
+  accountName       String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  User              User                @relation(fields: [userId], references: [id])
+  UserPaymentMethod UserPaymentMethod[]
+}
+
+model EsewaDetails {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  esewaId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model KhaltiDetails {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  khaltiId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
 }
 
 model Category {
