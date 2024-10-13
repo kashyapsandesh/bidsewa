@@ -3,7 +3,7 @@ import { AppError } from "../../utils/appError";
 import { Prisma, PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs"; // Import bcrypt for hashing passwords
 import jwt from "jsonwebtoken"; // Import jsonwebtoken for creating JWT tokens
-
+import { Plan } from "@prisma/client";
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET as string;
 export const createUser = async (
@@ -17,16 +17,21 @@ export const createUser = async (
       email,
       phone,
       role,
+      plan,
       password,
       bankDetails,
       paymentMethodDetails,
     } = req.body;
 
     // Check for required fields
-    if (!username || !email || !phone || !password || !role) {
+    if (!username || !email || !phone || !password || !role || !plan) {
       return next(new AppError("Please provide all the required fields", 400));
     }
-
+    // Validate the plan
+    const validPlans = Object.values(Plan);
+    if (!validPlans.includes(plan)) {
+      return next(new AppError(`Invalid plan: ${plan}`, 400));
+    }
     // Check if user or phone already exists
     const userExists = await prisma.user.findUnique({
       where: { email },
@@ -98,6 +103,9 @@ export const createUser = async (
     } else {
       return next(new AppError("Invalid payment method selected", 400));
     }
+    if ((role == "SELLER" || role == "INSPECTOR") && !plan) {
+      return next(new AppError("Plan must be provided for seller", 400));
+    }
 
     // Hash the password before saving to the database
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -109,6 +117,7 @@ export const createUser = async (
         email,
         phone,
         role,
+        plan,
         password: hashedPassword,
 
         UserPaymentMethod:
@@ -175,6 +184,27 @@ export const createUser = async (
         bankDetails: true,
       },
     });
+    if (plan === "SubscriptionPlan") {
+      const expiresAt = new Date(); // Get the current date
+      expiresAt.setMonth(expiresAt.getMonth() + 1); // Add one month to the current date
+
+      await prisma.subscription.create({
+        data: {
+          userId: newUser.id, // Connect the subscription to the user
+          plan: "FREE", // Set the plan type, you can change this if needed
+          expiresAt: expiresAt, // Set the expiration date to one month from now
+        },
+      });
+    }
+    if (plan == "CommissionBased") {
+      await prisma.commissionCharge.create({
+        data: {
+          userId: newUser.id,
+          amount: 0,
+          sellCount: 0,
+        },
+      });
+    }
 
     // Exclude the password from the response
     const { password: _, ...userResponse } = newUser;

@@ -14,6 +14,11 @@ enum Role {
   ADMIN
 }
 
+enum Plan {
+  SubscriptionPlan
+  CommissionBased
+}
+
 enum SubscriptionPlanType {
   FREE
   BASIC
@@ -25,6 +30,16 @@ enum PaymentMethod {
   KHALTI
 
   BANK
+}
+
+model CommissionCharge {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  sellCount Int
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
 }
 
 model User {
@@ -50,6 +65,7 @@ model User {
   AuditLog            AuditLog[]
   Wallet              Wallet[]
   devicePlayerId      String?
+  plan                Plan?             
   InspectorProfile    InspectorProfile[]
   WalletHistory       WalletHistory[]
   SubscriptionHistory SubscriptionHistory[]
@@ -60,6 +76,7 @@ model User {
   EsewaDetails      EsewaDetails[]
   KhaltiDetails     KhaltiDetails[]
   UserPaymentMethod UserPaymentMethod[]
+  CommissionCharge  CommissionCharge[]
 
   @@index([email]) // Index for email for performance
   @@index([phone]) // Index for phone for performance
