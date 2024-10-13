@@ -42,11 +42,11 @@ export const createUser = async (
     }
 
     // Check if role is seller and bank details are provided
-    if (role === "SELLER" && !bankDetails) {
-      return next(
-        new AppError("Bank details must be provided for sellers", 400)
-      );
-    }
+    // if (role === "SELLER") {
+    //   return next(
+    //     new AppError("Bank details must be provided for sellers", 400)
+    //   );
+    // }
 
     // Validate payment method details based on the selected payment method
     const { method } = paymentMethodDetails; // Extracting the payment method
@@ -132,10 +132,32 @@ export const createUser = async (
                       }
                     : {}),
                   ...(paymentMethodDetails.method === "ESEWA"
-                    ? { esewaId: paymentMethodDetails.esewaId }
+                    ? {
+                        esewaDetails: {
+                          create: {
+                            esewaId: paymentMethodDetails.esewaId,
+                            User: {
+                              connect: {
+                                email: email, // We're using email to connect the user, assuming it's unique
+                              },
+                            },
+                          },
+                        },
+                      }
                     : {}),
                   ...(paymentMethodDetails.method === "KHALTI"
-                    ? { khaltiId: paymentMethodDetails.khaltiId }
+                    ? {
+                        khaltiDetails: {
+                          create: {
+                            khaltiId: paymentMethodDetails.khaltiId,
+                            User: {
+                              connect: {
+                                email: email, // We're using email to connect the user, assuming it's unique
+                              },
+                            },
+                          },
+                        },
+                      }
                     : {}),
                 },
               }

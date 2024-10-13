@@ -67,14 +67,17 @@ model User {
 }
 
 model UserPaymentMethod {
-  id            Int          @id @default(autoincrement())
-  userId        Int
-  method        String
-  esewaId       String? // Optional field for ESEWA
-  khaltiId      String? // Optional field for KHALTI
-  bankDetails   BankDetails? @relation(fields: [bankDetailsId], references: [id])
+  id           Int           @id @default(autoincrement())
+  userId       Int
+  method       String
+  esewaId      Int? // Optional field for ESEWA
+  esewaDetails EsewaDetails? @relation(fields: [esewaId], references: [id])
+
+  khaltiId      Int? // Optional field for KHALTI
+  khaltiDetails KhaltiDetails? @relation(fields: [khaltiId], references: [id])
+  bankDetails   BankDetails?   @relation(fields: [bankDetailsId], references: [id])
   bankDetailsId Int?
-  user          User         @relation(fields: [userId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
 }
 
 model PasswordResetToken {
@@ -118,21 +121,23 @@ model BankDetails {
 }
 
 model EsewaDetails {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  esewaId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  User      User     @relation(fields: [userId], references: [id])
+  id                Int                 @id @default(autoincrement())
+  userId            Int
+  esewaId           String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  User              User                @relation(fields: [userId], references: [id])
+  UserPaymentMethod UserPaymentMethod[]
 }
 
 model KhaltiDetails {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  khaltiId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  User      User     @relation(fields: [userId], references: [id])
+  id                Int                 @id @default(autoincrement())
+  userId            Int
+  khaltiId          String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  User              User                @relation(fields: [userId], references: [id])
+  UserPaymentMethod UserPaymentMethod[]
 }
 
 model Category {
