@@ -2,9 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import { AppError } from "../../utils/appError";
 import { Prisma, PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs"; // Import bcrypt for hashing passwords
+import jwt from "jsonwebtoken"; // Import jsonwebtoken for creating JWT tokens
 
 const prisma = new PrismaClient();
-
+const JWT_SECRET = process.env.JWT_SECRET as string;
 export const createUser = async (
   req: Request,
   res: Response,
@@ -167,6 +168,8 @@ export const createUser = async (
         UserPaymentMethod: {
           include: {
             bankDetails: true,
+            esewaDetails: true,
+            khaltiDetails: true,
           },
         },
         bankDetails: true,
@@ -199,5 +202,90 @@ export const createUser = async (
 
     // Fallback for any other error
     return next(new AppError("An error occurred while creating the user", 500));
+  }
+};
+
+export const loginUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const { email, phone, password } = req.body;
+  try {
+    // Find user by email or phone using Prisma
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { phone }],
+      },
+    });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    // Create a JWT token
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+      expiresIn: "1h", // Token expiration
+    });
+    console.log(user.role);
+    console.log("Token:", token);
+    // Set token in cookie
+    res.cookie("token", token, {
+      httpOnly: true, // Ensure the cookie is not accessible via JavaScript
+      secure: process.env.NODE_ENV === "production", // Set to true in production
+      maxAge: 3600000, // Cookie expiration time (1 hour)
+    });
+    // Return user data (excluding password)
+    const { password: _, ...userWithoutPassword } = user;
+    return res.json({ user: userWithoutPassword, token });
+  } catch (error) {
+    console.error("Error in loginUser:", error);
+    return res.status(500).json({ message: "An error occurred" });
+  }
+};
+
+export const logoutUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    res.clearCookie("token");
+    return res.json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Error in logoutUser:", error);
+    return res.status(500).json({ message: "An error occurred" });
+  }
+};
+export const myInfo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user?.id,
+      },
+      include: {
+        UserPaymentMethod: {
+          include: {
+            bankDetails: true,
+          },
+        },
+        bankDetails: true,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const { password: _, ...userResponse } = user;
+    return res.json({ user: userResponse });
+  } catch (error) {
+    console.error("Error in myInfo:", error);
+    return res.status(500).json({ message: "An error occurred" });
   }
 };
