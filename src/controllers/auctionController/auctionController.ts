@@ -75,7 +75,10 @@
 
 import { Request, RequestHandler, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { uploadToS3 } from "../../helpers/s3/fileuploadTos3";
+import {
+  generatePresignedUrl,
+  uploadToS3,
+} from "../../helpers/s3/fileuploadTos3";
 import { AppError } from "../../utils/appError";
 
 const prisma = new PrismaClient();
@@ -187,6 +190,50 @@ export const createNewAuction: RequestHandler = async (
     });
   } catch (error: any) {
     console.error(error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getAllAuctions: RequestHandler = async (req, res) => {
+  try {
+    const auctions = await prisma.bidProduct.findMany({
+      include: {
+        images: true, // Include related images
+      },
+    });
+
+    // Map through the auctions to format the response and generate presigned URLs for images
+    const formattedAuctions = await Promise.all(
+      auctions.map(async (auction) => {
+        const presignedImageUrls = await Promise.all(
+          auction.images.map((image) =>
+            generatePresignedUrl(image.url, "bidsewa")
+          ) // Adjust bucket name as needed
+        );
+
+        return {
+          id: auction.id,
+          userId: auction.userId,
+          name: auction.name,
+          description: auction.description,
+          startingBidAmount: auction.startingBidAmount,
+          currentBidAmount: auction.currentBidAmount,
+          highestBidAmount: auction.highestBidAmount,
+          bidstartTime: auction.bidstartTime,
+          bidEndTime: auction.bidEndTime,
+          createdAt: auction.createdAt,
+          updatedAt: auction.updatedAt,
+          images: presignedImageUrls, // Use presigned URLs instead of direct URLs
+        };
+      })
+    );
+
+    return res.status(200).json({
+      message: "Auctions retrieved successfully",
+      auctions: formattedAuctions,
+    });
+  } catch (error: any) {
+    console.error("Error fetching auctions:", error);
     return res.status(500).json({ message: error.message });
   }
 };
