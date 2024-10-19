@@ -77,6 +77,7 @@ model User {
   KhaltiDetails     KhaltiDetails[]
   UserPaymentMethod UserPaymentMethod[]
   CommissionCharge  CommissionCharge[]
+  Payment           Payment[]
 
   @@index([email]) // Index for email for performance
   @@index([phone]) // Index for phone for performance
@@ -275,4 +276,16 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   User      User[]
+}
+
+model Payment {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  plan String
+  
+  amount    Float
+  method    PaymentMethod
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  User      User          @relation(fields: [userId], references: [id])
 }
