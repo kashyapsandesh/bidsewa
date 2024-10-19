@@ -10,7 +10,7 @@ import { AppError } from "../../utils/appError";
 import { formatUrl } from "@aws-sdk/util-format-url";
 import { Hash } from "@smithy/hash-node";
 import { HttpRequest } from "@smithy/protocol-http";
-export const uploadToS3 = async (file: any, bucketname: string) => {
+export const uploadToS3 = async (key:any, file: any, bucketname: string) => {
   try {
     console.log(process.env.AwsAccessKey);
     console.log(process.env.AwsSecrateKey);
@@ -29,7 +29,7 @@ export const uploadToS3 = async (file: any, bucketname: string) => {
     }`;
     const command = new PutObjectCommand({
       Bucket: bucketname,
-      Key: newFileName,
+      Key: key,
       Body: file.data, // Using file.buffer for file data
       ContentType: file.mimetype,
     });

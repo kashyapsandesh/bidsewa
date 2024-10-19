@@ -7,7 +7,9 @@ const authRouter = (0, express_1.Router)();
 authRouter.post("/register", registerUserController_1.createUser);
 authRouter.post("/login", registerUserController_1.loginUser);
 authRouter.get("/logout", registerUserController_1.logoutUser);
-authRouter.get("/me", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.authorizeRoles)("SELLER"), (req, res) => {
-    res.send("Hello");
-});
+authRouter.get("/me", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.authorizeRoles)("SELLER"), registerUserController_1.myInfo);
+authRouter.post("/forgetpassword", registerUserController_1.forgetpassword);
+authRouter.post("/resetpassword/", registerUserController_1.resetpassword);
+authRouter.post("/verify-forgetpassword-token", registerUserController_1.verifyOtp);
+authRouter.post("/change-password", authMiddleware_1.isAuthenticated, registerUserController_1.changePassword);
 exports.default = authRouter;

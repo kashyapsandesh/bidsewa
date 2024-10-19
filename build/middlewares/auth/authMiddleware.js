@@ -32,6 +32,7 @@ const isAuthenticated = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
         console.log("Token found:", token);
         // Verify the token
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        console.log("Role:", decoded.role);
         // Check if the user exists in the database
         const user = yield prisma.user.findUnique({
             where: {

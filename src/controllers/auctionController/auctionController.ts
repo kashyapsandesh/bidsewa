@@ -118,8 +118,16 @@ export const createNewAuction: RequestHandler = async (
       const files = Array.isArray(req.files.images)
         ? req.files.images
         : [req.files.images];
+      console.log(files.images);
       for (const file of files) {
-        const uploadResult = await uploadToS3(file, "bidsewa");
+        const newFileName = `s3_auctionImage${Date.now().toString()}.${
+          file.mimetype.split("/")[1]
+        }`;
+        const uploadResult = await uploadToS3(
+          `upload/auctionImage/${newFileName}`,
+          file,
+          "bidsewa"
+        );
         if (uploadResult) {
           imageUrls.push(uploadResult); // This should now work correctly
         }
@@ -132,9 +140,16 @@ export const createNewAuction: RequestHandler = async (
         ? req.files.videos
         : [req.files.videos];
       for (const file of files) {
-        const uploadResult = await uploadToS3(file, "bidsewa");
+        const newFileName = `s3_auctionImage${Date.now().toString()}.${
+          file.mimetype.split("/")[1]
+        }`;
+        const uploadResult = await uploadToS3(
+          `upload/auctionVideo/${newFileName}`,
+          file,
+          "bidsewa"
+        );
         if (uploadResult) {
-          imageUrls.push(uploadResult); // Ensure uploadResult is the correct URL
+          videoUrls.push(uploadResult); // Ensure uploadResult is the correct URL
         }
       }
     }
@@ -144,6 +159,18 @@ export const createNewAuction: RequestHandler = async (
       return res
         .status(400)
         .json({ message: "At least one image is required" });
+    }
+    if (new Date(bidstartTime) > new Date(bidEndTime)) {
+      return new AppError(
+        "Bid start time should be less than bid end time",
+        400
+      );
+    }
+    if (new Date(bidEndTime) <= new Date(bidstartTime)) {
+      return new AppError(
+        "Bid end time should be greater than bid start time",
+        400
+      );
     }
 
     // Create auction with images and videos
@@ -183,11 +210,6 @@ export const createNewAuction: RequestHandler = async (
       message: "Auction created successfully",
       auction,
     });
-
-    return res.status(201).json({
-      message: "Auction created successfully",
-      auction,
-    });
   } catch (error: any) {
     console.error(error);
     return res.status(500).json({ message: error.message });
@@ -199,6 +221,7 @@ export const getAllAuctions: RequestHandler = async (req, res) => {
     const auctions = await prisma.bidProduct.findMany({
       include: {
         images: true, // Include related images
+        videos: true,
       },
     });
 
@@ -209,6 +232,12 @@ export const getAllAuctions: RequestHandler = async (req, res) => {
           auction.images.map((image) =>
             generatePresignedUrl(image.url, "bidsewa")
           ) // Adjust bucket name as needed
+        );
+        // Generate presigned URLs for videos
+        const presignedVideoUrls = await Promise.all(
+          auction.videos.map((video) =>
+            generatePresignedUrl(video.url, "bidsewa")
+          )
         );
 
         return {
@@ -224,6 +253,7 @@ export const getAllAuctions: RequestHandler = async (req, res) => {
           createdAt: auction.createdAt,
           updatedAt: auction.updatedAt,
           images: presignedImageUrls, // Use presigned URLs instead of direct URLs
+          videos: presignedVideoUrls,
         };
       })
     );

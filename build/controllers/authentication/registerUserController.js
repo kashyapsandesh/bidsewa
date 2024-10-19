@@ -23,19 +23,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logoutUser = exports.loginUser = exports.createUser = void 0;
+exports.changePassword = exports.resetpassword = exports.verifyOtp = exports.forgetpassword = exports.myInfo = exports.logoutUser = exports.loginUser = exports.createUser = void 0;
 const appError_1 = require("../../utils/appError");
 const client_1 = require("@prisma/client");
 const bcryptjs_1 = __importDefault(require("bcryptjs")); // Import bcrypt for hashing passwords
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken")); // Import jsonwebtoken for creating JWT tokens
+const client_2 = require("@prisma/client");
+const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma = new client_1.PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
 const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { username, email, phone, role, password, bankDetails, paymentMethodDetails, } = req.body;
+        const { username, email, phone, role, plan, password, bankDetails, paymentMethodDetails, } = req.body;
         // Check for required fields
-        if (!username || !email || !phone || !password || !role) {
+        if (!username || !email || !phone || !password || !role || !plan) {
             return next(new appError_1.AppError("Please provide all the required fields", 400));
+        }
+        // Validate the plan
+        const validPlans = Object.values(client_2.Plan);
+        if (!validPlans.includes(plan)) {
+            return next(new appError_1.AppError(`Invalid plan: ${plan}`, 400));
         }
         // Check if user or phone already exists
         const userExists = yield prisma.user.findUnique({
@@ -87,6 +94,9 @@ const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         else {
             return next(new appError_1.AppError("Invalid payment method selected", 400));
         }
+        if ((role == "SELLER" || role == "INSPECTOR") && !plan) {
+            return next(new appError_1.AppError("Plan must be provided for seller", 400));
+        }
         // Hash the password before saving to the database
         const hashedPassword = yield bcryptjs_1.default.hash(password, 12);
         // Create new user
@@ -96,6 +106,7 @@ const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
                 email,
                 phone,
                 role,
+                plan,
                 password: hashedPassword,
                 UserPaymentMethod: role == "SELLER" || role == "INSPECTOR"
                     ? {
@@ -148,11 +159,33 @@ const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
                 UserPaymentMethod: {
                     include: {
                         bankDetails: true,
+                        esewaDetails: true,
+                        khaltiDetails: true,
                     },
                 },
                 bankDetails: true,
             },
         });
+        if (plan === "SubscriptionPlan") {
+            const expiresAt = new Date(); // Get the current date
+            expiresAt.setMonth(expiresAt.getMonth() + 1); // Add one month to the current date
+            yield prisma.subscription.create({
+                data: {
+                    userId: newUser.id, // Connect the subscription to the user
+                    plan: "FREE", // Set the plan type, you can change this if needed
+                    expiresAt: expiresAt, // Set the expiration date to one month from now
+                },
+            });
+        }
+        if (plan == "CommissionBased") {
+            yield prisma.commissionCharge.create({
+                data: {
+                    userId: newUser.id,
+                    amount: 0,
+                    sellCount: 0,
+                },
+            });
+        }
         // Exclude the password from the response
         const { password: _ } = newUser, userResponse = __rest(newUser, ["password"]);
         return res.status(201).json({
@@ -198,6 +231,8 @@ const loginUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function
         const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, JWT_SECRET, {
             expiresIn: "1h", // Token expiration
         });
+        console.log(user.role);
+        console.log("Token:", token);
         // Set token in cookie
         res.cookie("token", token, {
             httpOnly: true, // Ensure the cookie is not accessible via JavaScript
@@ -225,3 +260,282 @@ const logoutUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.logoutUser = logoutUser;
+const myInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const user = yield prisma.user.findUnique({
+            where: {
+                id: (_a = req.user) === null || _a === void 0 ? void 0 : _a.id,
+            },
+            include: {
+                UserPaymentMethod: {
+                    include: {
+                        bankDetails: true,
+                    },
+                },
+                bankDetails: true,
+            },
+        });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        const { password: _ } = user, userResponse = __rest(user, ["password"]);
+        return res.json({ user: userResponse });
+    }
+    catch (error) {
+        console.error("Error in myInfo:", error);
+        return res.status(500).json({ message: "An error occurred" });
+    }
+});
+exports.myInfo = myInfo;
+const forgetpassword = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email } = req.body;
+    try {
+        // Find the user by email
+        const user = yield prisma.user.findUnique({
+            where: { email },
+        });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        // Generate a random 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generates a random 6-digit number
+        // Set OTP expiration time (5 minutes from now)
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        // Check if a token already exists for the user
+        const existingToken = yield prisma.passwordResetToken.findFirst({
+            where: { userId: user.id }, // Use findFirst to search by userId
+        });
+        if (existingToken) {
+            // If token exists, update it
+            yield prisma.passwordResetToken.update({
+                where: { id: existingToken.id }, // Use the existing token's ID
+                data: {
+                    token: otp,
+                    // expiresAt: expiresAt,
+                },
+            });
+        }
+        else {
+            // If no token exists, create a new one
+            yield prisma.passwordResetToken.create({
+                data: {
+                    token: otp,
+                    userId: user.id,
+                    // expiresAt: expiresAt,
+                },
+            });
+        }
+        // Send email with the OTP
+        const transporter = nodemailer_1.default.createTransport({
+            service: "gmail",
+            secure: true,
+            auth: {
+                user: process.env.EMAIL,
+                pass: process.env.PASSWORD,
+            },
+        });
+        const receiver = {
+            from: "info@bidsewa.com.np",
+            to: email,
+            subject: "Reset Password OTP",
+            text: `Your OTP for resetting your password is: ${otp}. It is valid for 5 minutes.`,
+        };
+        yield transporter.sendMail(receiver);
+        return res.json({ message: "OTP sent successfully" });
+    }
+    catch (error) {
+        console.error("Error in forgetpassword:", error);
+        return res.status(500).json({ message: "An error occurred" });
+    }
+});
+exports.forgetpassword = forgetpassword;
+// Verify OTP for password reset
+const verifyOtp = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { otp } = req.body; // Expecting OTP in the request body
+        if (!otp) {
+            return res.status(400).json({ message: "Please provide OTP" });
+        }
+        // Find the token record using the OTP
+        const tokenRecord = yield prisma.passwordResetToken.findUnique({
+            where: {
+                token: otp, // Use the OTP to find the record
+            },
+        });
+        // Check if token exists and is not expired
+        if (!tokenRecord) {
+            return res.status(400).json({ message: "Invalid or expired OTP" });
+        }
+        // Check expiration time
+        // const currentTime = new Date();
+        // if (tokenRecord.expiresAt < currentTime) {
+        //   return res.status(400).json({ message: "OTP has expired" });
+        // }
+        // OTP is valid
+        return res.json({
+            message: "OTP verified successfully",
+            userId: tokenRecord.userId,
+        });
+    }
+    catch (error) {
+        console.error("Error in verifyOtp:", error);
+        return res.status(500).json({ message: "An error occurred" });
+    }
+});
+exports.verifyOtp = verifyOtp;
+// Reset password after OTP verification
+const resetpassword = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { otp, password } = req.body; // Expecting OTP and new password in the request body
+        if (!otp || !password) {
+            return res
+                .status(400)
+                .json({ message: "Please provide OTP and new password" });
+        }
+        // Find the token record using the OTP
+        const tokenRecord = yield prisma.passwordResetToken.findUnique({
+            where: {
+                token: otp, // Use the OTP to find the record
+            },
+        });
+        // Check if token exists and is not expired
+        if (!tokenRecord) {
+            return res.status(400).json({ message: "Invalid or expired OTP" });
+        }
+        // Check expiration time
+        // const currentTime = new Date();
+        // if (tokenRecord.expiresAt < currentTime) {
+        //   return res.status(400).json({ message: "OTP has expired" });
+        // }
+        // Find the user associated with the token
+        const user = yield prisma.user.findUnique({
+            where: {
+                id: tokenRecord.userId, // Use the userId from the token record
+            },
+        });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        // Hash the new password
+        const hashedPassword = yield bcryptjs_1.default.hash(password, 12);
+        // Update the user's password
+        yield prisma.user.update({
+            where: {
+                id: user.id,
+            },
+            data: {
+                password: hashedPassword,
+            },
+        });
+        // Optionally delete the token record after use
+        yield prisma.passwordResetToken.delete({
+            where: {
+                token: otp, // Delete the token record
+            },
+        });
+        return res.json({ message: "Password updated successfully" });
+    }
+    catch (error) {
+        console.error("Error in resetpassword:", error);
+        return res.status(500).json({ message: "An error occurred" });
+    }
+});
+exports.resetpassword = resetpassword;
+// export const resetpassword = async (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ) => {
+//   try {
+//     const { otp, password } = req.body; // Expecting OTP and new password in the request body
+//     if (!otp || !password) {
+//       return res.status(400).json({ message: "Please provide OTP and new password" });
+//     }
+//     // Find the token record using the OTP
+//     const tokenRecord = await prisma.passwordResetToken.findUnique({
+//       where: {
+//         token: otp, // Use the OTP to find the record
+//       },
+//     });
+//     // Check if token exists and if it has expired
+//     if (!tokenRecord) {
+//       return res.status(400).json({ message: "Invalid or expired OTP" });
+//     }
+//     // Check expiration time
+//     // const currentTime = new Date();
+//     // if (tokenRecord.expiresAt < currentTime) {
+//     //   return res.status(400).json({ message: "OTP has expired" });
+//     // }
+//     // Find the user associated with the token
+//     const user = await prisma.user.findUnique({
+//       where: {
+//         id: tokenRecord.userId, // Use the userId from the token record
+//       },
+//     });
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+//     // Hash the new password
+//     const hashedPassword = await bcrypt.hash(password, 12);
+//     // Update the user's password
+//     await prisma.user.update({
+//       where: {
+//         id: user.id,
+//       },
+//       data: {
+//         password: hashedPassword,
+//       },
+//     });
+//     // Optionally delete the token record after use
+//     await prisma.passwordResetToken.delete({
+//       where: {
+//         token: otp, // Delete the token record
+//       },
+//     });
+//     return res.json({ message: "Password updated successfully" });
+//   } catch (error) {
+//     console.error("Error in resetpassword:", error);
+//     return res.status(500).json({ message: "An error occurred" });
+//   }
+// };
+const changePassword = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { email, oldPassword, newPassword } = req.body;
+        // Validate input
+        if (!email || !oldPassword || !newPassword) {
+            return res.status(400).json({ message: "All fields are required" });
+        }
+        // Find user by email
+        const user = yield prisma.user.findUnique({
+            where: { email },
+        });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        // Check if old password is correct
+        const isPasswordValid = yield bcryptjs_1.default.compare(oldPassword, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: "Invalid old password" });
+        }
+        // Ensure new password is sufficiently strong (you can enforce rules here)
+        if (newPassword.length < 8) {
+            return res
+                .status(400)
+                .json({ message: "Password must be at least 8 characters long" });
+        }
+        // Hash the new password
+        const hashedPassword = yield bcryptjs_1.default.hash(newPassword, 12);
+        // Update the user's password in the database
+        yield prisma.user.update({
+            where: { id: user.id },
+            data: { password: hashedPassword },
+        });
+        return res.json({ message: "Password updated successfully" });
+    }
+    catch (error) {
+        console.error("Error in changePassword:", error);
+        return res.status(500).json({ message: "An error occurred" });
+    }
+});
+exports.changePassword = changePassword;

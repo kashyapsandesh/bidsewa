@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auctionController_1 = require("../../controllers/auctionController/auctionController");
+const authMiddleware_1 = require("../../middlewares/auth/authMiddleware");
+const auctionRouter = (0, express_1.Router)();
+auctionRouter.post("/createnewauction", authMiddleware_1.isAuthenticated, auctionController_1.createNewAuction);
+auctionRouter.get("/getallauction", auctionController_1.getAllAuctions);
+// auctionRouter.delete("/delete/:filename", deleteUploads);
+// auctionRouter.get("/view/:filename", viewUploads);
+exports.default = auctionRouter;
