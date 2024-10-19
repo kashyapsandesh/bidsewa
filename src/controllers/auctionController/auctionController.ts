@@ -218,22 +218,35 @@ export const createNewAuction: RequestHandler = async (
 
 export const getAllAuctions: RequestHandler = async (req, res) => {
   try {
+    // Get page and limit from query parameters, with default values
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    // Calculate the number of records to skip
+    const skip = (page - 1) * limit;
+
+    // Get total count of auctions
+    const totalAuctions = await prisma.bidProduct.count();
+
+    // Fetch auctions with pagination
     const auctions = await prisma.bidProduct.findMany({
+      skip,
+      take: limit,
       include: {
         images: true, // Include related images
         videos: true,
       },
     });
 
-    // Map through the auctions to format the response and generate presigned URLs for images
+    // Map through the auctions to format the response and generate presigned URLs for images and videos
     const formattedAuctions = await Promise.all(
       auctions.map(async (auction) => {
         const presignedImageUrls = await Promise.all(
           auction.images.map((image) =>
             generatePresignedUrl(image.url, "bidsewa")
-          ) // Adjust bucket name as needed
+          )
         );
-        // Generate presigned URLs for videos
+
         const presignedVideoUrls = await Promise.all(
           auction.videos.map((video) =>
             generatePresignedUrl(video.url, "bidsewa")
@@ -252,14 +265,20 @@ export const getAllAuctions: RequestHandler = async (req, res) => {
           bidEndTime: auction.bidEndTime,
           createdAt: auction.createdAt,
           updatedAt: auction.updatedAt,
-          images: presignedImageUrls, // Use presigned URLs instead of direct URLs
+          images: presignedImageUrls,
           videos: presignedVideoUrls,
         };
       })
     );
 
+    // Calculate total pages
+    const totalPages = Math.ceil(totalAuctions / limit);
+
     return res.status(200).json({
       message: "Auctions retrieved successfully",
+      currentPage: page,
+      totalPages,
+      totalAuctions,
       auctions: formattedAuctions,
     });
   } catch (error: any) {
