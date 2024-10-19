@@ -65,7 +65,7 @@ model User {
   AuditLog            AuditLog[]
   Wallet              Wallet[]
   devicePlayerId      String?
-  plan                Plan?             
+  plan                Plan?
   InspectorProfile    InspectorProfile[]
   WalletHistory       WalletHistory[]
   SubscriptionHistory SubscriptionHistory[]
@@ -111,6 +111,7 @@ model Subscription {
   userId    Int
   plan      SubscriptionPlanType @default(FREE)
   createdAt DateTime             @default(now())
+  sellCount Int                  @default(0)
   expiresAt DateTime
   updatedAt DateTime             @updatedAt
   User      User                 @relation(fields: [userId], references: [id])

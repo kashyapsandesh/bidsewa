@@ -172,7 +172,47 @@ export const createNewAuction: RequestHandler = async (
         400
       );
     }
+    const sellerplan = await prisma.user.findUnique({
+      where: {
+        id: req.user.id,
+      },
+      select: {
+        plan: true,
+      },
+    });
+    console.log(sellerplan?.plan);
+    if (sellerplan?.plan == "CommissionBased") {
+      const checkDueCommission = await prisma.commissionCharge.findFirst({
+        where: {
+          userId: req.user.id,
+        },
+      });
+      console.log(checkDueCommission?.sellCount);
+      console.log(checkDueCommission?.amount);
+      if (checkDueCommission?.sellCount == 3 && checkDueCommission.amount > 0) {
+        throw new AppError(
+          "You have to pay due commission to create new auction",
+          400
+        );
+      }
+    }
 
+    if (sellerplan?.plan == "SubscriptionPlan") {
+      const checkSubscriptionPlan = await prisma.subscription.findFirst({
+        where: {
+          userId: req.user.id,
+        },
+      });
+      if (
+        checkSubscriptionPlan?.plan == "FREE" &&
+        checkSubscriptionPlan?.sellCount == 3
+      ) {
+        throw new AppError(
+          "You need to upgrade your subscription plan to create new auction",
+          400
+        );
+      }
+    }
     // Create auction with images and videos
     // Create auction with images and videos
     const auction = await prisma.bidProduct.create({
