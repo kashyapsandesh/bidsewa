@@ -70,3 +70,5 @@ Install Prisma package and prisma client:
 
 # Migrate schema in database using the command 
 npx prisma migrate dev --name init
+
+# gitlab
